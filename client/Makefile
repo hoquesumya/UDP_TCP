@@ -5,16 +5,20 @@ CFLAGS = -Wall -g
 CXXFLAGS = -Wall -g -std=c++17 -pthread
 
 LDFLAGS = -pthread
+
 exe = client
+objects = mrt_client.o client.o
+
 
 .PHONY: default
 default: $(exe)
+$(exe) :  mrt_client.o 
+$(objects): mrt_client.h
 
-client : client.o
 
 .PHONY:   clean
 clean:
-	rm -f *~ a.out client *.o $(exe)
+	rm -f *~ a.out core client *.o $(exe) $(objects)
 
 .PHONY: all
 all: clean default

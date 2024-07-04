@@ -2,34 +2,42 @@
 #include <iostream>
 
 #include "mrt_client.h"
-
-Client::Client(unsigned short c_port, unsigned short s_port, char* s_addr,long s_size){
-    client_port = c_port;
-    server_port = s_port;
+template <typename T>
+Client<T>::Client(unsigned short c_port, unsigned short s_port, char* s_addr, long s_size){
+    client_port = htons(client_port);
+    server_port = htons(s_port);
     server_ip = s_addr;
     segment_size = s_size;
 
+    if ((sockFD = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+        die("socket failed");
+    
+    memset(&servaddr, 0, sizeof(servaddr)); 
+    servaddr.sin_family = AF_INET; 
+    servaddr.sin_port = server_port;
+    servaddr.sin_addr.s_addr = in_addr(server_ip);
+
 }
-
-Client::~Client(){
+template <typename T>
+Client<T>::~Client(){
 
 }
-
-int Client::connect(){
+template <typename T>
+int Client<T>::connect(){
     return 1;
 }
-int Client::send(char* data){
+template <typename T>
+int Client<T>::send(T* data){
     int n = 0;
     return  n;
 }
-
-int Client::close(){
+template <typename T>
+int Client<T>::close(){
     /*
         request to close the connection with the server
         blocking until the connection is closed
     */
    return 1;
-
 }
 
         
