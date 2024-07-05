@@ -12,13 +12,13 @@ class Server{
         Server(unsigned int port, long buf);
         int accept();
         int close();
-        int recv();
-        int creactSocket();
+        void recv();
+        ~Server();
     private:
-        unsigned server_port;
+        unsigned int server_port;
         long buff_size;
-        struct sockaddr_in serverAddr;
-        int sockServer ;
+        struct sockaddr_in serverAddr, clnaddr;
+        int sock ;
         void die(const char* s) {perror(s); exit(1);}
 
 };

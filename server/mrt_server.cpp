@@ -2,25 +2,21 @@
 
 Server::Server(unsigned int port, long buff){
 
-    this-> server_port = port;
+    this-> server_port = htons(port);
     this -> buff_size = buff;
-    
-
-}
-int Server::creactSocket (){
-    if ((this -> sockServer = socket(AF_INET, SOCK_STREAM, 0)) < 0)
-                     die("socket failed");
     memset(&(this-> serverAddr), 0 , sizeof(this->serverAddr));
+    memset(&(this-> clnaddr), 0 , sizeof(this->clnaddr));
+
+    if ((sock =socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+        die("socket failed");
     this -> serverAddr.sin_family = AF_INET;
     this -> serverAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    this -> serverAddr.sin_port = this -> server_port;
-    if (bind(this -> sockServer, (struct sockaddr *) &(this-> serverAddr), sizeof(this -> serverAddr)) < 0){
-        int err = errno;
-        std::cerr << "Bind failed: " << strerror(err) << " (errno: " << err << ")" << std::endl;
-         die("bind failed");
-    }
-    return this->sockServer;
+    this->serverAddr.sin_port = this->server_port;
 
+    if (bind(this->sock, (struct sockaddr*)&(this->serverAddr), sizeof(this->serverAddr)) < 0) {
+            perror("bind failed");
+
+    }
 }
 int Server::accept(){
 
@@ -28,7 +24,19 @@ int Server::accept(){
 int Server::close(){
 
 }
-int Server::recv(){
-    
+void Server::recv(){
 
+    char buffer[4096]; 
+    
+    socklen_t len = sizeof(this->clnaddr);
+    int n = recvfrom(this->sock, (char *) buffer, sizeof(buffer) , MSG_WAITALL,
+                     (struct sockaddr*)&(this->clnaddr), &len);
+     if (n < 0) {
+        perror("recvfrom failed");
+    }
+    std::cout<<buffer<<std::endl;
+    
+}
+Server::~Server(){
+    
 }

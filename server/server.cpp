@@ -17,5 +17,7 @@ int main(int argc, char* argv[]){
         exit(1);
     }
     Server s(server_port, buff_size);
+ 
+    s.recv();
     
 } 
