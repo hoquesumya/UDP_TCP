@@ -16,21 +16,22 @@ class Network{
         std::string lossfile;
         std::map<int, std::vector<int>> loss;
         struct sockaddr_in servaddr, cliaddr; 
+        struct sockaddr_in main_server;
+        
         void die(const char* s) {perror(s); exit(1);}
-        unsigned int network_port;
+        unsigned int network_port, clnt_sock;
         int sockServer ;
-        unsigned int clientPort ;
-        std::string client_addr;
-        std::string serverAddr;
+        char* server_ip;
         unsigned int server_port;
 
 
     public:
-        Network(unsigned int network_port,std::string serverAddr, unsigned int server_port, std::string lossfile );
+        Network(unsigned int network_port,char* serverAddr, unsigned int server_port, std::string lossfile );
         ~Network();
-        int createSocket();
+        void createSocket();
         bool setLossflie();
         std::vector<int> getLossFile(std::time_t st);
+        void handleMessage();
 
 
 

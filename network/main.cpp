@@ -8,7 +8,7 @@ namespace handleMsg{
 }
 
 int main(int argc, char* argv[]){
- std::cout<<argc;
+
  if (argc != 5){
         std::cerr << "Incorrect Usage:" <<argv[0]<<" <Network Port> <server_addr> <server_port> <loss File>" << std::endl;   
         exit(1);
@@ -23,7 +23,8 @@ int main(int argc, char* argv[]){
         exit(1);
     }
     Network net(net_port, sevrer_addr, server_port, "");
+    net.createSocket();
+    net.handleMessage();
    
-
 
 }
