@@ -15,9 +15,6 @@ class Client{
         
         //destructor
         ~Client();
-        
-        //Copy constructor
-        Client(const Client& orig);
 
         int connect();
 

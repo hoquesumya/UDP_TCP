@@ -9,13 +9,13 @@ Client<T>::Client(unsigned short c_port, unsigned short s_port, char* s_addr, lo
     server_ip = s_addr;
     segment_size = s_size;
 
-    if ((sockFD = socket(AF_INET, SOCK_STREAM, 0)) < 0)
+    if ((sockFD = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
         die("socket failed");
     
     memset(&servaddr, 0, sizeof(servaddr)); 
     servaddr.sin_family = AF_INET; 
     servaddr.sin_port = server_port;
-    servaddr.sin_addr.s_addr = in_addr(server_ip);
+    servaddr.sin_addr.s_addr = inet_addr(server_ip);
 
 }
 template <typename T>
@@ -28,6 +28,11 @@ int Client<T>::connect(){
 }
 template <typename T>
 int Client<T>::send(T* data){
+
+    sendto(sockFD, data->c_str(), data->length(), 
+        0, (const struct sockaddr *) &servaddr,  
+            sizeof(servaddr)); 
+    
     int n = 0;
     return  n;
 }
