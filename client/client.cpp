@@ -1,5 +1,5 @@
 #include <iostream>
-#include "mrt_client.cpp"
+#include "mrt_client.h"
 #include <errno.h>
 
 
@@ -17,11 +17,12 @@ int main(int argc, char** argv){
         perror("Port is out of range . Rnage is 49151 - 65535");
         exit(1);
     }
-   Client<std::string> cl(client_port, server_port, server_addr, segment_size);
+   Client cl(client_port, server_port, server_addr, segment_size);
    std::string h = "hello";
-   cl.send(&h);
- 
+   sleep(10);
+   cl.send(&h, h.length());
 
-    return 0;
+   return 0; 
+
 
 }
