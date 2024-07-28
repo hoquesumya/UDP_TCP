@@ -11,6 +11,7 @@ objects = mrt_client.o client.o segment.o
 
 .PHONY: default
 default: $(exe)
+
 $(exe): $(objects)
 	$(CXX) $(LDFLAGS) $(objects) -o $(exe)
 

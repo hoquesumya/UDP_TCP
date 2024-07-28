@@ -23,6 +23,18 @@ class Network{
         int sockServer ;
         char* server_ip;
         unsigned int server_port;
+       
+        struct Playload {
+            uint16_t cl_port;
+            uint16_t des_port;
+            int seq_;
+            int _ack;
+            uint16_t rwnd_;
+            uint8_t header_field_ : 4;
+            uint8_t flag_field_ : 6;
+            uint16_t checksum_;
+            char* data_;
+    };
 
 
     public:

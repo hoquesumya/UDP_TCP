@@ -73,15 +73,15 @@ memset(&servaddr, 0, sizeof(servaddr));
 */
 
 void Network::handleMessage(){
-    char buffer[4096]; 
+    Playload buffer; 
     char* h = "hello";
     
     socklen_t len = sizeof(cliaddr);
-    int n = recvfrom(sockServer, (char *)buffer, 4096, MSG_WAITALL, 
+    int n = recvfrom(sockServer, &buffer, sizeof(Playload), MSG_WAITALL, 
     ( struct sockaddr *)&(this -> cliaddr),&len);
-    std::cout<<buffer<<std::endl;
+    std::cout<<buffer.cl_port<<std::endl;
 
-     if(sendto(this->clnt_sock, h, sizeof(h),
+     if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
         0, (const struct sockaddr *) &main_server,  
             sizeof(sockaddr_in)) == -1){
                 std::cout<<"error"<<std::endl;

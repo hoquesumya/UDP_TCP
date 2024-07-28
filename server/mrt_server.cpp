@@ -26,15 +26,15 @@ int Server::close(){
 }
 void Server::recv(){
 
-    char buffer[4096]; 
+    Playload buffer; 
     
     socklen_t len = sizeof(this->clnaddr);
-    int n = recvfrom(this->sock, (char *) buffer, sizeof(buffer) , MSG_WAITALL,
+    int n = recvfrom(this->sock, &buffer, sizeof(Playload) , MSG_WAITALL,
                      (struct sockaddr*)&(this->clnaddr), &len);
      if (n < 0) {
         perror("recvfrom failed");
     }
-    std::cout<<buffer<<std::endl;
+    std::cout<<buffer.data_<< " "<<buffer.checksum_<<std::endl;
     
 }
 Server::~Server(){

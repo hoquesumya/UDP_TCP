@@ -55,9 +55,9 @@ int Client::send(void* data, size_t len){
    
   pthread_mutex_unlock(&mutex);
     //q.push(data)
-    sendto(sockFD, data, len, 
+   /*sendto(sockFD, data, len, 
         0, (const struct sockaddr *) &servaddr,  
-            sizeof(servaddr)); 
+            sizeof(servaddr)); */
     
     int n = 0;
     return  n;
@@ -101,6 +101,10 @@ void * thread_recv_cpp(void * arg){
    Segment s(thread_cl.client_port, thread_cl.server_port, 1, 1, 0, 5, 0b101111, 0, data);
    Playload pt;
    s.create_segment(&pt);
+   std::cout<<pt.flag_field_<<std::endl;
+   sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
+        0, (const struct sockaddr *) &thread_cl.servaddr,  
+            sizeof(thread_cl.servaddr)); 
    std::cout << pt.checksum_<<std::endl;
    thread_cl.q.pop();
 

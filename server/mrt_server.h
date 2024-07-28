@@ -5,6 +5,7 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
 #include <iostream>
+#include "../config/segment.h"
 #ifndef __SERVER_H__
 #define __SERVER_H__
 class Server{
