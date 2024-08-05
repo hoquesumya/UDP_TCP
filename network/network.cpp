@@ -73,23 +73,23 @@ memset(&servaddr, 0, sizeof(servaddr));
 */
 
 void Network::handleMessage(){
-    Playload buffer; 
-    char* h = "hello";
+    while(true){
+        
+        Playload buffer; 
     
-    socklen_t len = sizeof(cliaddr);
-    int n = recvfrom(sockServer, &buffer, sizeof(Playload), MSG_WAITALL, 
-    ( struct sockaddr *)&(this -> cliaddr),&len);
-    std::cout<<buffer.cl_port<<std::endl;
+        socklen_t len = sizeof(cliaddr);
+        int n = recvfrom(sockServer, &buffer, sizeof(Playload), MSG_WAITALL, 
+        ( struct sockaddr *)&(this -> cliaddr),&len);
+        std::cout<<buffer.data_<<std::endl;
 
-     if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
-        0, (const struct sockaddr *) &main_server,  
-            sizeof(sockaddr_in)) == -1){
-                std::cout<<"error"<<std::endl;
-            };
+        if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
+            0, (const struct sockaddr *) &main_server,  
+                sizeof(sockaddr_in)) == -1){
+                    std::cout<<"error"<<std::endl;
+                };
 
-    std::cout<<"byer"<<std::endl;
-
-
+        std::cout<<"byer"<<std::endl;
+    }
 
 }
 Network::~Network(){

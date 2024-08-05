@@ -1,5 +1,6 @@
 #include <cstring>
 #include "mrt_client.h"
+#include <algorithm>
 Client::Client(unsigned short c_port, unsigned short s_port, char* s_addr, long s_size){
     client_port = htons(client_port);
     server_port = htons(s_port);
@@ -40,24 +41,51 @@ int Client::connect(){
     return 1;
 }
 
-int Client::send(void* data, size_t len){
+int Client::send(std::string data, size_t len){
 
     pthread_mutex_lock(&mutex);
 
     bool was_empty = q.empty();
 
+
     if (len <= data_segment){
+        //char *temp = (char*)data.c_str();
         q.push(data);
+    }
+    else{
+        size_t i = 0;
+        size_t max_len =0;
+        while (i < len){
+            /*char temp_data[data_segment];
+            
+            if (i < data_segment){
+                max_len = data_segment;
+            }
+            else if (i % data_segment == 0 and len - i > data_segment){
+                max_len = i + data_segment;
+            }
+            else{
+                max_len = len;
+            }
+            std::cout<<"max_len"<<max_len<<" "<<i<<std::endl;
+            size_t j = 0;
+
+            for(; i < max_len; i++){
+                temp_data[j++] = data[i];
+            }*/
+            max_len = std::min(len - i, static_cast<size_t>(data_segment));
+            std::string temp_data = data.substr(i, max_len);
+            q.push(temp_data);
+            //std::cout<<temp_data<<" "<<std::endl;
+            i += max_len;
+        }
+
     }
     if (was_empty){
         pthread_cond_broadcast(&cond);
     }
    
   pthread_mutex_unlock(&mutex);
-    //q.push(data)
-   /*sendto(sockFD, data, len, 
-        0, (const struct sockaddr *) &servaddr,  
-            sizeof(servaddr)); */
     
     int n = 0;
     return  n;
@@ -97,18 +125,22 @@ void * thread_recv_cpp(void * arg){
         std::cout<<"waiting"<<std::endl;
         pthread_cond_wait(&thread_cl.cond, &thread_cl.mutex);
     }
-   void* data = thread_cl.q.front();
-   Segment s(thread_cl.client_port, thread_cl.server_port, 1, 1, 0, 5, 0b101111, 0, data);
-   Playload pt;
-   s.create_segment(&pt);
-   std::cout<<pt.flag_field_<<std::endl;
-   sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
-        0, (const struct sockaddr *) &thread_cl.servaddr,  
-            sizeof(thread_cl.servaddr)); 
-   std::cout << pt.checksum_<<std::endl;
-   thread_cl.q.pop();
+    while (thread_cl.q.size()> 0){
 
-     pthread_mutex_unlock(&thread_cl.mutex);
+    
+        std::string data = thread_cl.q.front();
+        Segment s(thread_cl.client_port, thread_cl.server_port, 1, 1, 0, 5, 0b101111, 0, data);
+        Playload pt;
+        s.create_segment(&pt);
+        //std::cout<<pt.data_<<std::endl;
+        //std::cout<<pt.flag_field_<<std::endl;
+        sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
+                0, (const struct sockaddr *) &thread_cl.servaddr,  
+                    sizeof(thread_cl.servaddr)); 
+        //std::cout << pt.checksum_<<std::endl;
+        thread_cl.q.pop();
+        pthread_mutex_unlock(&thread_cl.mutex);
+    }
     return nullptr;
 
 }

@@ -33,7 +33,7 @@ class Network{
             uint8_t header_field_ : 4;
             uint8_t flag_field_ : 6;
             uint16_t checksum_;
-            char* data_;
+            char data_[4096];
     };
 
 

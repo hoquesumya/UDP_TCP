@@ -26,16 +26,20 @@ int Server::close(){
 }
 void Server::recv(){
 
-    Playload buffer; 
-    
-    socklen_t len = sizeof(this->clnaddr);
-    int n = recvfrom(this->sock, &buffer, sizeof(Playload) , MSG_WAITALL,
-                     (struct sockaddr*)&(this->clnaddr), &len);
-     if (n < 0) {
-        perror("recvfrom failed");
+    while(true){
+        Playload buffer; 
+        socklen_t len = sizeof(this->clnaddr);
+        int n = recvfrom(this->sock, &buffer, sizeof(Playload) , MSG_WAITALL,
+                        (struct sockaddr*)&(this->clnaddr), &len);
+        if (n < 0) {
+            perror("recvfrom failed");
+        }
+        std::cout<<buffer.data_<< " "<< ntohs(buffer.checksum_)<<std::endl;
+        Segment server_seg((uint16_t) 0, (uint16_t)server_port, 1, 1, 0, 5, 0b101111, 0, nullptr);
+        server_seg.extract_segment(&buffer);
+
     }
-    std::cout<<buffer.data_<< " "<<buffer.checksum_<<std::endl;
-    
+
 }
 Server::~Server(){
     

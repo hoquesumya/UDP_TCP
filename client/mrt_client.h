@@ -29,7 +29,7 @@ class Client{
 
         int connect();
 
-        int send(void* data, size_t len);
+        int send(std::string data, size_t len);
 
         int close();
 
@@ -39,7 +39,7 @@ class Client{
         unsigned short client_port;
         unsigned short server_port;
 
-        std::queue<void *>q;
+        std::queue<std::string>q;
         char* server_ip;
         long segment_size; //maximum segment size including the TCP headers
         int data_segment;
