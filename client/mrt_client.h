@@ -38,6 +38,7 @@ class Client{
     private:
         unsigned short client_port;
         unsigned short server_port;
+        int client_seq = 0;
 
         std::queue<std::string>q;
         char* server_ip;
@@ -45,6 +46,9 @@ class Client{
         int data_segment;
         struct  sockaddr_in     servaddr;
         int sockFD;
+        long window = 0;
+        long next_sq=0;
+
 
         void die(const char* s) {perror(s); exit(1);};
         friend void* thread_recv_cpp(void* p);

@@ -9,6 +9,7 @@
 #include <arpa/inet.h> 
 #include <netinet/in.h> 
 #include <vector>
+#include<thread>
 #ifndef __NETWORK_H__
 #define __NETWORK_H__
 class Network{
@@ -34,6 +35,8 @@ class Network{
             uint8_t flag_field_ : 6;
             uint16_t checksum_;
             char data_[4096];
+            long mss;
+            
     };
 
 
@@ -44,6 +47,8 @@ class Network{
         bool setLossflie();
         std::vector<int> getLossFile(std::time_t st);
         void handleMessage();
+        void handle_client();
+        void handle_server();
 
 
 

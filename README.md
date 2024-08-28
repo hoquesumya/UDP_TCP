@@ -1,1 +1,3 @@
-this project is the updated version of the UDP-->TCP project from CSEE4119.
+Implementing the Mini realiable tranfer protocol on Top of UDP
+The protocl supports Flow control inspired by TCP
+The protcol also support Bit Error, and Packet loss, implemented by GBN

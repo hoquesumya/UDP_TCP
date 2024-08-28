@@ -71,25 +71,49 @@ memset(&servaddr, 0, sizeof(servaddr));
                 MSG_WAITALL, (struct sockaddr *) &servaddr, 
                 &len); 
 */
-
-void Network::handleMessage(){
+void Network::handle_client(){
     while(true){
         
         Playload buffer; 
     
         socklen_t len = sizeof(cliaddr);
+        //recv from client
         int n = recvfrom(sockServer, &buffer, sizeof(Playload), MSG_WAITALL, 
         ( struct sockaddr *)&(this -> cliaddr),&len);
-        std::cout<<buffer.data_<<std::endl;
-
+        std::cout<<"data is"<<buffer.data_<<std::endl;
+        //send to server
         if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
             0, (const struct sockaddr *) &main_server,  
                 sizeof(sockaddr_in)) == -1){
                     std::cout<<"error"<<std::endl;
                 };
-
-        std::cout<<"byer"<<std::endl;
     }
+
+}
+void Network::handle_server(){
+    Playload buffer;
+        socklen_t len_server = sizeof(main_server);
+    while(true){
+        int n_server = recvfrom(clnt_sock, &buffer, sizeof(Playload), MSG_WAITALL, 
+        ( struct sockaddr *) &main_server, &len_server);
+        //send to client
+        if(sendto(this->sockServer, &buffer, sizeof(Playload),
+            0, (const struct sockaddr *) &cliaddr,  
+                sizeof(sockaddr_in)) == -1){
+                    std::cout<<"error"<<std::endl;
+                };
+    }
+
+
+}
+
+void Network::handleMessage(){
+    /**we need the lembda*/
+    std::thread t1{[this](){handle_client();}};
+    std::thread t2{[this](){handle_server();}};
+   
+    t1.join();
+    t2.join();
 
 }
 Network::~Network(){

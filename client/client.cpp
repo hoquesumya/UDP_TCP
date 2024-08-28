@@ -23,6 +23,7 @@ int main(int argc, char** argv){
    std::string res = read_data(file);
    Client cl(client_port, server_port, server_addr, segment_size);
    std::cout << res.length() <<std::endl;
+   cl.connect();
    cl.send(res, res.length());
 
    return 0; 
