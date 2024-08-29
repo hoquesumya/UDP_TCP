@@ -145,9 +145,9 @@ void * thread_recv_cpp(void * arg){
         std::vector<std::string>temp;
         std::cout<<"window"<<thread_cl.window <<std::endl;
        
-      /* while(thread_cl.window == 0){
+      while(thread_cl.window == 0){
             Segment s(thread_cl.client_port, thread_cl.server_port, 
-            thread_cl.client_seq - 1, 1, 0, 5, 0b101111, 0, "", thread_cl.data_segment);
+            - 1, 1, 0, 5, 0b101111, 0, "", thread_cl.data_segment);
             Playload pt;
             s.create_segment(&pt);
             socklen_t len = sizeof(thread_cl.servaddr);
@@ -159,7 +159,7 @@ void * thread_recv_cpp(void * arg){
             thread_cl.window = pt.rwnd_;
             std::cout<<"my current window is: "<< thread_cl.window<<std::endl;
 
-        }*/
+        }
 
         int num_seg = thread_cl.window;
         if (num_seg > thread_cl.q.size()){
