@@ -47,7 +47,7 @@ int Client::connect(){
     // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data
     Segment s(client_port, server_port, client_seq, 0, 0, 5, 0b000010, 0, "", data_segment);
     Playload pt;
-    std::cout<<" jjkkk "<<data_segment<<std::endl;
+   // std::cout<<" jjkkk "<<data_segment<<std::endl;
     s.create_segment(&pt);
     socklen_t len = sizeof(servaddr);
 
@@ -144,14 +144,33 @@ void * thread_recv_cpp(void * arg){
     while (thread_cl.q.size()> 0){
         std::vector<std::string>temp;
         std::cout<<"window"<<thread_cl.window <<std::endl;
+       
+      /* while(thread_cl.window == 0){
+            Segment s(thread_cl.client_port, thread_cl.server_port, 
+            thread_cl.client_seq - 1, 1, 0, 5, 0b101111, 0, "", thread_cl.data_segment);
+            Playload pt;
+            s.create_segment(&pt);
+            socklen_t len = sizeof(thread_cl.servaddr);
+            sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
+                    0, (const struct sockaddr *) &thread_cl.servaddr,  
+                        sizeof(thread_cl.servaddr)); 
+            int n = recvfrom(thread_cl.sockFD, &pt, sizeof(Playload), MSG_WAITALL, 
+               (struct sockaddr *)& thread_cl.servaddr,&len);
+            thread_cl.window = pt.rwnd_;
+            std::cout<<"my current window is: "<< thread_cl.window<<std::endl;
+
+        }*/
+
         int num_seg = thread_cl.window;
         if (num_seg > thread_cl.q.size()){
             num_seg = thread_cl.q.size();
         }
+        
         for (int i = 0; i < num_seg; i ++){
             std::string data = thread_cl.q.front();
            
-            Segment s(thread_cl.client_port, thread_cl.server_port, thread_cl.client_seq, 1, 0, 5, 0b101111, 0, data, thread_cl.data_segment);
+            Segment s(thread_cl.client_port, thread_cl.server_port,
+             thread_cl.client_seq, 1, 0, 5, 0b101111, 0, data, thread_cl.data_segment);
             Playload pt;
             s.create_segment(&pt);
             sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
@@ -170,12 +189,12 @@ void * thread_recv_cpp(void * arg){
         while(true){
              int n = recvfrom(thread_cl.sockFD, &buf, sizeof(Playload), MSG_WAITALL, 
                (struct sockaddr *)& thread_cl.servaddr,&len);
+               std::cout<<"server ack is: "<< buf._ack<< ", "<<buf.rwnd_<<std::endl;
                if (buf._ack == expected_last_ack_recvd){
-                 std::cout<<"server ack is: "<<buf._ack<<std::endl;
                     break;
-               }
-                   
+               }     
         }
+        thread_cl.window = buf.rwnd_;
 
        pthread_mutex_lock(&thread_cl.mutex);
         
