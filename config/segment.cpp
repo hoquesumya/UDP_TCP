@@ -71,10 +71,7 @@ uint16_t Segment::create_checksum(uint16_t seq_, uint16_t a,
  uint16_t header,  uint16_t fl, uint16_t cl_port, uint16_t des_port, 
  uint16_t check, uint16_t r, char* buf, uint16_t mss){
    
-   /*uint16_t seq_ = (uint16_t)seq;
-   uint16_t a = (uint16_t)_ack_;
-   uint16_t header =(u_int16_t) header_field;
-   uint16_t fl = (uint16_t) flag_field;*/
+
 
    uint16_t sum = 0;
    sum += seq_ + a + header + fl + check + cl_port + des_port + r + mss;
@@ -105,7 +102,7 @@ uint16_t Segment::create_checksum(uint16_t seq_, uint16_t a,
    we want to get the extra 1 bit and wrap it around the right bits
 
    */
-   std::cout<<"sum"<<sum<<std::endl;
+   //std::cout<<"sum"<<sum<<std::endl;
    sum = (sum & 0xFFFF) + (sum >> 16);
    sum = (sum & 0xFFFF) + (sum >> 16);
    return ~sum;
