@@ -98,7 +98,7 @@ void* thread_recv_buffer(void* arg){
         }
 
         pthread_mutex_lock(&serv.mutex_recv);
-        if (buffer.seq_ < serv.latest_ack){
+        if (buffer.seq_ == -1){
              Segment seg((uint16_t)serv.server_port, buffer.des_port, 0, 
                     serv.latest_ack, serv.max_recv_size - serv.shared_recv.size(), 5 , 0b001000, 0, "", 0);
              
@@ -256,11 +256,10 @@ void* thread_send_data(void* arg){
                                 std::cout<<"error"<<std::endl;
                     serv.ack_list.insert(serv.latest_ack);
                     }
-            
+                std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
 
             }
 
-            std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
 
             if(n > 0){
                 serv.shared_recv.pop_front();
