@@ -7,7 +7,9 @@
 #include <iostream>
 #include<deque>
 #include<thread>
+#include<set>
 #include<mutex>
+#include<cstring>
 #include <pthread.h>
 #include "../config/segment.h"
 #ifndef __SERVER_H__
@@ -50,8 +52,8 @@ class Server{
         pthread_t send_id;
         pthread_attr_t m_attr_recv;
         pthread_attr_t m_attr_send;
-       
-        
+        std::set<int>ack_list;
+        long latest_ack = 0;
         void die(const char* s) {perror(s); exit(1);}
         void SpawnThred();
         friend void* thread_recv_buffer(void* arg);

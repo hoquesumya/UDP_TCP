@@ -98,14 +98,29 @@ void* thread_recv_buffer(void* arg){
         }
 
         pthread_mutex_lock(&serv.mutex_recv);
-        
+        if (buffer.seq_ < serv.latest_ack){
+             Segment seg((uint16_t)serv.server_port, buffer.des_port, 0, 
+                    serv.latest_ack, serv.max_recv_size - serv.shared_recv.size(), 5 , 0b001000, 0, "", 0);
+             
+                Playload temp_buf;
+                seg.create_segment(&temp_buf);
+                /*
+                send to the client the buf
+                */
+                    if(sendto(serv.sock, &temp_buf, sizeof(Playload),
+                                0, (const struct sockaddr *) &serv.clnaddr,  
+                                    sizeof(sockaddr_in)) == -1)
+                                std::cout<<"error"<<std::endl;
+                    std::cout<<"the size  is ::::::: " <<serv.max_recv_size - serv.shared_recv.size() <<std::endl;
+                 pthread_mutex_unlock(&serv.mutex_recv);
+            continue;
+        }
+
         bool is_empty = serv.shared_recv.empty();
         /*lock the recv buffer */
-       
+        std::cout<<"got tit !!!!!!!!! "<<std::endl;
         Playload temp_buffer = buffer;
         serv.shared_recv.push_back(temp_buffer);
-        std::cout<<"from receive: "<< serv.shared_recv.size()<<std::endl;
-        
         if(is_empty){
             pthread_cond_signal(&serv.cond_recv);
         }
@@ -131,19 +146,19 @@ void* thread_send_data(void* arg){
         } 
     
        if (!partial_establised && !established){
-            std::cout<<"reciving connection"<<std::endl;
+           // std::cout<<"reciving connection"<<std::endl;
          // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data
             buf = serv.shared_recv.front();
             serv.shared_recv.pop_front();
-            it =  serv.shared_recv.begin();
+          //  it =  serv.shared_recv.begin();
 
             pthread_mutex_unlock(&serv.mutex_recv);
             serv.mss = buf.mss_;
             serv.max_len_data_buf = serv.data_buffer / serv.mss;
             serv.max_recv_size = serv.buff_size / serv.mss;
-           // std::cout<<"data len"<< serv.max_len_data_buf <<std::endl;
+            std::cout<<"data len "<< serv.max_len_data_buf <<std::endl;
             Segment seg((uint16_t)serv.server_port, buf.des_port, 1, 
-            buf.seq_ + 1, serv.max_recv_size, 5 , 0b010010, 0, "", 0);
+            buf.seq_ + 1, serv.max_recv_size - 1, 5 , 0b010010, 0, "", 0);
             /*
             to - do here we will examine the buf then create the segment
             */
@@ -165,7 +180,7 @@ void* thread_send_data(void* arg){
            // std::cout<<"almost_done"<<std::endl;
             buf = serv.shared_recv.front();
             serv.shared_recv.pop_front();
-             it =  serv.shared_recv.begin();
+            // it =  serv.shared_recv.begin();
             pthread_mutex_unlock(&serv.mutex_recv);
          
             Segment seg((uint16_t)serv.server_port, buf.des_port, 1, 
@@ -190,7 +205,7 @@ void* thread_send_data(void* arg){
         pthread_mutex_lock(&serv.mutex_data);
         n = serv.max_len_data_buf - serv.shared_data.size();
        
-      //  std::cout<< "data buffer size is "<< n <<std::endl;
+        std::cout<< "data buffer size is "<< n <<std::endl;
         
        pthread_mutex_unlock(&serv.mutex_data);
         /* 
@@ -202,53 +217,62 @@ void* thread_send_data(void* arg){
         */
         Playload _recv_buf;
         pthread_mutex_lock(&serv.mutex_recv);
+            int remain = serv.max_recv_size - serv.shared_recv.size() ;
+            std::cout<<"window size is: " << remain<<std::endl;
+
             if (n > 0){
                // std::cout<<"only one data"<<std::endl;
                 it = serv.shared_recv.begin();
             }
              buf = serv.shared_recv.front();
-             std::cout<<buf.data_<<std::endl;
+            // std::cout<<buf.data_<<std::endl;
 
-            //if (it != serv.shared_recv.end())
-         //   std::cout<<"dereferencing: "<<serv.shared_recv.size() <<std::endl;
+            //std::cout<<"dereferencing: "<<serv.shared_recv.size() <<std::endl;
             _recv_buf = *it;
-            std::cout<<_recv_buf.data_<<std::endl;
+            
+            if (strlen(_recv_buf.data_) == 0){
+                std::cout<<"empty"<<std::endl;
+                --it;
+                pthread_mutex_unlock(&serv.mutex_recv);
+                continue;
+            }
+             else{
+                 serv.latest_ack = _recv_buf.seq_ + strlen(_recv_buf.data_) + 1;
+                 std::cout<<"the lastest ack is: "<< serv.latest_ack<<std::endl;
+       
+                if(serv.ack_list.find(serv.latest_ack) == serv.ack_list.end()){
+                    
+                    Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
+                    serv.latest_ack, remain, 5 , 0b001000, 0, "", 0);
+                    seg.extract_segment(&_recv_buf);
+                    Playload temp_buf;
+                    seg.create_segment(&temp_buf);
+                /*
+                send to the client the buf
+                */
+                    if(sendto(serv.sock, &temp_buf, sizeof(Playload),
+                                0, (const struct sockaddr *) &serv.clnaddr,  
+                                    sizeof(sockaddr_in)) == -1)
+                                std::cout<<"error"<<std::endl;
+                    serv.ack_list.insert(serv.latest_ack);
+                    }
+            
+
+            }
+
+            std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
 
             if(n > 0){
                 serv.shared_recv.pop_front();
               //  std::cout<<"current size is: "<<serv.shared_recv.size();
                 it = serv.shared_recv.begin();
-
             }
-            //send the  ack but with the recv window less tha
-        
-            
-            int remain = serv.max_recv_size - serv.shared_recv.size();
-          //  std::cout<<"window size is: " << remain<<std::endl;
 
-       // pthread_mutex_unlock(&serv.mutex_recv);
         
-        long latest_ack = _recv_buf.seq_ + strlen(_recv_buf.data_) + 1;
-        std::cout<<"the lastest ack is: "<< latest_ack<<std::endl;
-        Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
-            latest_ack, remain, 5 , 0b001000, 0, "", 0);
-        seg.extract_segment(&_recv_buf);
-        Playload temp_buf;
-        seg.create_segment(&temp_buf);
-        /*
-        send to the client the buf
-        */
-        if(sendto(serv.sock, &temp_buf, sizeof(Playload),
-                    0, (const struct sockaddr *) &serv.clnaddr,  
-                        sizeof(sockaddr_in)) == -1)
-                    std::cout<<"error"<<std::endl;
-        
-        
-           
-
+       
         /*this part of the code will execute if there is there 
         is space otherwise continue*/
-        if(n <= 0){
+        else if(n <= 0){
            // std::cout<<"wait the data buffer is full"<<std::endl;
              
            // std::cout<<"more than one data"<<std::endl;
@@ -304,13 +328,13 @@ int Server::recv(int size){
             pthread_cond_wait(&cond_data, &mutex_data);
         }
        // sleep(10);
-       /*if (i == 0){
+       if (i == 2){
             pthread_mutex_unlock(&mutex_data);
             std::cout<<"sleeping"<<std::endl;
-            sleep(4);
+            sleep(9);
             pthread_mutex_lock(&mutex_data);
             std::cout<<" done sleeping"<<std::endl;
-        }*/
+        }
         std::string data = shared_data.front();
         shared_data.pop_front();
         
