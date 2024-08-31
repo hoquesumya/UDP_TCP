@@ -98,7 +98,7 @@ void* thread_recv_buffer(void* arg){
         }
 
         pthread_mutex_lock(&serv.mutex_recv);
-        if (buffer.seq_ == -1){
+       /* if (buffer.seq_ == -1){
              Segment seg((uint16_t)serv.server_port, buffer.des_port, 0, 
                     serv.latest_ack, serv.max_recv_size - serv.shared_recv.size(), 5 , 0b001000, 0, "", 0);
              
@@ -106,7 +106,7 @@ void* thread_recv_buffer(void* arg){
                 seg.create_segment(&temp_buf);
                 /*
                 send to the client the buf
-                */
+                
                     if(sendto(serv.sock, &temp_buf, sizeof(Playload),
                                 0, (const struct sockaddr *) &serv.clnaddr,  
                                     sizeof(sockaddr_in)) == -1)
@@ -115,7 +115,7 @@ void* thread_recv_buffer(void* arg){
                  pthread_mutex_unlock(&serv.mutex_recv);
             continue;
         }
-
+        */
         bool is_empty = serv.shared_recv.empty();
         /*lock the recv buffer */
         std::cout<<"got tit !!!!!!!!! "<<std::endl;
@@ -140,16 +140,18 @@ void* thread_send_data(void* arg){
     auto it = serv.shared_recv.end();
     while(1){
         pthread_mutex_lock(&serv.mutex_recv);
-        while (serv.shared_recv.size() ==0){
-             it = serv.shared_recv.begin();
+        while (serv.shared_recv.empty()){
+               it = serv.shared_recv.begin();
             pthread_cond_wait(&serv.cond_recv,&serv.mutex_recv);
         } 
+        //std::cout<<"data currnlty:"<<(*it).data_<<std::endl;
     
        if (!partial_establised && !established){
            // std::cout<<"reciving connection"<<std::endl;
          // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data
             buf = serv.shared_recv.front();
             serv.shared_recv.pop_front();
+             it = serv.shared_recv.end();
           //  it =  serv.shared_recv.begin();
 
             pthread_mutex_unlock(&serv.mutex_recv);
@@ -180,6 +182,7 @@ void* thread_send_data(void* arg){
            // std::cout<<"almost_done"<<std::endl;
             buf = serv.shared_recv.front();
             serv.shared_recv.pop_front();
+            it = serv.shared_recv.end();
             // it =  serv.shared_recv.begin();
             pthread_mutex_unlock(&serv.mutex_recv);
          
@@ -218,10 +221,10 @@ void* thread_send_data(void* arg){
         Playload _recv_buf;
         pthread_mutex_lock(&serv.mutex_recv);
             int remain = serv.max_recv_size - serv.shared_recv.size() ;
-            std::cout<<"window size is: " << remain<<std::endl;
+            std::cout<<"window remaining size is: " << remain<<std::endl;
 
-            if (n > 0){
-               // std::cout<<"only one data"<<std::endl;
+            if ( n > 0){
+                std::cout<<"only one data"<<std::endl;
                 it = serv.shared_recv.begin();
             }
              buf = serv.shared_recv.front();
@@ -230,16 +233,46 @@ void* thread_send_data(void* arg){
             //std::cout<<"dereferencing: "<<serv.shared_recv.size() <<std::endl;
             _recv_buf = *it;
             
-            if (strlen(_recv_buf.data_) == 0){
-                std::cout<<"empty"<<std::endl;
+           /* if (strlen(_recv_buf.data_) == 0){
+
+                std::cout<<"empty: "<<_recv_buf.header_field_<<std::endl;
                 --it;
                 pthread_mutex_unlock(&serv.mutex_recv);
                 continue;
-            }
-             else{
-                 serv.latest_ack = _recv_buf.seq_ + strlen(_recv_buf.data_) + 1;
+            }*/
+                 pthread_mutex_unlock(&serv.mutex_recv);
+                  if(_recv_buf.seq_ == -1){
+                       std::cout<<"found window zero"<<std::endl;
+                        pthread_mutex_lock(&serv.mutex_recv);
+                         if (it != serv.shared_recv.begin()) {
+                                --it; // Move to the previous element
+                                serv.shared_recv.erase(std::next(it)); // Erase the element that was originally at `it`
+                                
+                            } else {
+                                it = serv.shared_recv.erase(it); // Handle the case where `it` is at the beginning
+                            }
+                            remain = serv.max_recv_size - serv.shared_recv.size();
+                             Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
+                    serv.latest_ack, remain, 5 , 0b001000, 0, "", 0);
+                    seg.extract_segment(&_recv_buf);
+                    Playload temp_buf;
+                    seg.create_segment(&temp_buf);
+                /*
+                send to the client the buf
+                */
+                    if(sendto(serv.sock, &temp_buf, sizeof(Playload),
+                                0, (const struct sockaddr *) &serv.clnaddr,  
+                                    sizeof(sockaddr_in)) == -1)
+                                std::cout<<"error"<<std::endl;
+
+                        pthread_mutex_unlock(&serv.mutex_recv);
+                        continue;
+
+                  }
+                  else
+                    serv.latest_ack = _recv_buf.seq_ + strlen(_recv_buf.data_) + 1;
                  std::cout<<"the lastest ack is: "<< serv.latest_ack<<std::endl;
-       
+               
                 if(serv.ack_list.find(serv.latest_ack) == serv.ack_list.end()){
                     
                     Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
@@ -256,49 +289,53 @@ void* thread_send_data(void* arg){
                                 std::cout<<"error"<<std::endl;
                     serv.ack_list.insert(serv.latest_ack);
                     }
-                std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
+            std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
+                
+            pthread_mutex_lock(&serv.mutex_recv);
 
-            }
-
-
-            if(n > 0){
-                serv.shared_recv.pop_front();
-              //  std::cout<<"current size is: "<<serv.shared_recv.size();
-                it = serv.shared_recv.begin();
-            }
-
-        
-       
-        /*this part of the code will execute if there is there 
-        is space otherwise continue*/
-        else if(n <= 0){
-           // std::cout<<"wait the data buffer is full"<<std::endl;
-             
-           // std::cout<<"more than one data"<<std::endl;
-
-            auto last = serv.shared_recv.end() - 1;
-            if (it != last){
-                std::cout<<"incrementing it"<<std::endl;
-                ++it;
-            }
-        
-           // std::cout<<"END data!!"<< (*(serv.shared_recv.end()-1)).data_<<std::endl;
+               if(n <= 0){
+                auto last = std::prev(serv.shared_recv.end());
+                auto b =   serv.shared_recv.begin();
+                if (it != last){
+                      std::cout<<"no data: "<<serv.shared_recv.size()<<std::endl;
+                     //std::cout<<"incrementing it: "<< (*(it + 1)).mss_<<std::endl;
+                     ++it;
+                }
+                else
+                     std::cout<<"we are in the end"<<std::endl;
+            
             pthread_mutex_unlock(&serv.mutex_recv);
-            continue;
+           }
 
-        }
-        pthread_mutex_unlock(&serv.mutex_recv);
+            else{
+                if (it == serv.shared_recv.begin()){
+                    serv.shared_recv.pop_front();
+                    it = serv.shared_recv.begin();
 
-        pthread_mutex_lock(&serv.mutex_data);
+                }
+                else{
+                     serv.shared_recv.pop_front();
+                     std::cout<<"we are not in the end"<<std::endl;
+
+
+                }
+                pthread_mutex_unlock(&serv.mutex_recv);
+       
+                pthread_mutex_lock(&serv.mutex_data);
 
     //    std::cout<<"main data into the buffer"<< std::endl;
-        bool is_emp = serv.shared_data.empty();
-        serv.shared_data.push_back(std::string(buf.data_));
-       // std::cout<<serv.shared_data.front()<<std::endl;
-        if(is_emp){
-            pthread_cond_signal(&serv.cond_data);
-        }
-        pthread_mutex_unlock(&serv.mutex_data);
+                bool is_emp = serv.shared_data.empty();
+                serv.shared_data.push_back(std::string(buf.data_));
+            // std::cout<<serv.shared_data.front()<<std::endl;
+                if(is_emp){
+                    pthread_cond_signal(&serv.cond_data);
+                }
+                pthread_mutex_unlock(&serv.mutex_data);
+
+            }
+            
+        
+        
  
     }
 }
@@ -327,13 +364,13 @@ int Server::recv(int size){
             pthread_cond_wait(&cond_data, &mutex_data);
         }
        // sleep(10);
-       if (i == 2){
-            pthread_mutex_unlock(&mutex_data);
+      
+           pthread_mutex_unlock(&mutex_data);
             std::cout<<"sleeping"<<std::endl;
-            sleep(9);
+            sleep(1);
             pthread_mutex_lock(&mutex_data);
             std::cout<<" done sleeping"<<std::endl;
-        }
+        
         std::string data = shared_data.front();
         shared_data.pop_front();
         
