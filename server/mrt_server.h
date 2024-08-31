@@ -7,6 +7,7 @@
 #include <iostream>
 #include<deque>
 #include<thread>
+#include<list>
 #include<set>
 #include<mutex>
 #include<cstring>
@@ -39,8 +40,8 @@ class Server{
         int max_len_data_buf = 0;
         long rwnd; //maximum segment size
         int max_recv_size;
-        std::deque<Playload>shared_recv;
-        std::deque<std::string>shared_data;
+        std::list<Playload>shared_recv;
+        std::list<std::string>shared_data;
         pthread_mutex_t mutex_recv; // A mutex used to protect the queue itself
         pthread_mutex_t mutex_data;
         pthread_mutex_t mutex_established;
