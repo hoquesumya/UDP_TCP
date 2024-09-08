@@ -71,17 +71,32 @@ memset(&servaddr, 0, sizeof(servaddr));
                 MSG_WAITALL, (struct sockaddr *) &servaddr, 
                 &len); 
 */
-void Network::handle_client(){
-    while(true){
-        
-        Playload buffer; 
+void Network::handle_client(const std::chrono::time_point
+ <std::chrono::high_resolution_clock> start_time){
     
-        socklen_t len = sizeof(cliaddr);
+    Playload buffer; 
+        
+    socklen_t len = sizeof(cliaddr);
+    
+    while(true){
         //recv from client
         int n = recvfrom(sockServer, &buffer, sizeof(Playload), MSG_WAITALL, 
         ( struct sockaddr *)&(this -> cliaddr),&len);
-        std::cout<<"data is"<<buffer.data_<<std::endl;
+
+        auto res = getLossFile(start_time);
+        double lastPktLoss = res.first;
+        double lastBitError = res.second;
+
+        std::random_device rand;  
+         std::mt19937 gen(rand());  
+         std::uniform_int_distribution<>dis(0.0, 1.0); 
+         float temp = dis(gen);
+         if (temp <= lastPktLoss){
+            std::cout<<"packet loss occurrs client and not sending: "<<buffer.seq_<<std::endl;
+            continue;
+         }
         //send to server
+        std::cout<<"sending seq: "<<buffer.seq_<<std::endl;
         if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
             0, (const struct sockaddr *) &main_server,  
                 sizeof(sockaddr_in)) == -1){
@@ -90,12 +105,32 @@ void Network::handle_client(){
     }
 
 }
-void Network::handle_server(){
+void Network::handle_server(const std::chrono::time_point
+ <std::chrono::high_resolution_clock> start_time){
+
+ 
     Playload buffer;
-        socklen_t len_server = sizeof(main_server);
+    socklen_t len_server = sizeof(main_server);
+    
     while(true){
+
         int n_server = recvfrom(clnt_sock, &buffer, sizeof(Playload), MSG_WAITALL, 
         ( struct sockaddr *) &main_server, &len_server);
+
+        /*auto res = getLossFile(start_time);
+        double lastPktLoss = res.first;
+        double lastBitError = res.second;
+
+        std::random_device rand;  
+        std::mt19937 gen(rand());  
+        std::uniform_real_distribution<>dis(0.0, 1.0); 
+        float temp = dis(gen);
+       
+        if (temp <= lastPktLoss){
+            std::cout<<"packet loss occurrs server"<<std::endl;
+            std::cout<<temp<<","<<lastPktLoss<<std::endl;
+            continue;
+        }*/
         //send to client
         if(sendto(this->sockServer, &buffer, sizeof(Playload),
             0, (const struct sockaddr *) &cliaddr,  
@@ -106,11 +141,60 @@ void Network::handle_server(){
 
 
 }
+void Network::set_up_loss_file(const char * file){
+    std::ifstream ifs { file };
+    if (!ifs) {
+        if (file)
+            throw std::runtime_error{"can't open file: " + std::string(file)};
+        else
+            throw std::runtime_error{"no file name"};
+    } 
+    int integer;
+    float value1, value2;  
+     while (ifs >> integer >> value1 >> value2) {
+        // Process or display the data
+        loss[integer].push_back(value1);
+        loss[integer].push_back(value2);
+        std::cout << "Integer: " << integer << ", Value1: " << value1 << ", Value2: " << value2 << std::endl;
+    }
+
+    ifs.close(); 
+}
+ std::pair<float, float> Network::getLossFile(std::chrono::time_point
+ <std::chrono::high_resolution_clock> start_time) const{
+    sleep(1);
+      auto current_time = std::chrono::high_resolution_clock::now();
+    // Calculate elapsed time in seconds
+    auto elapsed_seconds = std::chrono::duration_cast<std::chrono::seconds>(current_time - start_time).count();
+
+    double lastPktLoss = 0;
+    double lastBitError = 0;
+
+    // Find the loss data based on elapsed time''
+    std::cout<<"elapsed time:"<<elapsed_seconds<<std::endl;
+    for (const auto& entry : loss) {
+        if (elapsed_seconds > entry.first) {
+            lastPktLoss = entry.second[0];
+           // std::cout<<"pakcet loss get"<<lastPktLoss<<std::endl;
+            lastBitError = entry.second[1];
+        }
+    }
+
+    return {lastPktLoss, lastBitError};
+
+
+ }
 
 void Network::handleMessage(){
     /**we need the lembda*/
-    std::thread t1{[this](){handle_client();}};
-    std::thread t2{[this](){handle_server();}};
+    auto start = std::chrono::high_resolution_clock::now();
+       std::thread t1([this, start]() {
+            handle_client(start);
+        });
+     std::thread t2([this, start]() {
+            handle_server(start);
+        });
+
    
     t1.join();
     t2.join();

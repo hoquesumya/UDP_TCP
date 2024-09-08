@@ -10,12 +10,15 @@
 #include <netinet/in.h> 
 #include <vector>
 #include<thread>
+#include <fstream>
+#include <stdexcept>
+#include<unordered_map>
+#include<random>
 #ifndef __NETWORK_H__
 #define __NETWORK_H__
 class Network{
     private:
         std::string lossfile;
-        std::map<int, std::vector<int>> loss;
         struct sockaddr_in servaddr, cliaddr; 
         struct sockaddr_in main_server;
         
@@ -24,6 +27,7 @@ class Network{
         int sockServer ;
         char* server_ip;
         unsigned int server_port;
+        std::unordered_map<int,std::vector<float>>loss;
        
         struct Playload {
             uint16_t cl_port;
@@ -38,7 +42,7 @@ class Network{
             long mss;
             
     };
-
+      std::pair<float, float> getLossFile(std::chrono::time_point<std::chrono::high_resolution_clock> start_time) const;
 
     public:
         Network(unsigned int network_port,char* serverAddr, unsigned int server_port, std::string lossfile );
@@ -47,12 +51,11 @@ class Network{
         bool setLossflie();
         std::vector<int> getLossFile(std::time_t st);
         void handleMessage();
-        void handle_client();
-        void handle_server();
-
-
-
-
+        void handle_client(const std::chrono::time_point
+ <std::chrono::high_resolution_clock> start_time);
+        void handle_server(const std::chrono::time_point
+ <std::chrono::high_resolution_clock> start_time);
+        void set_up_loss_file(const char *);
 
 };
 #endif

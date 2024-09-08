@@ -24,6 +24,7 @@ int main(int argc, char* argv[]){
     }
     Network net(net_port, sevrer_addr, server_port, "");
     net.createSocket();
+    net.set_up_loss_file("loss.txt");
     net.handleMessage();
    
 

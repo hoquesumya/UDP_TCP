@@ -13,6 +13,7 @@
 #include <netinet/in.h> 
 #include "../config/segment.h"
 #include <queue>
+#include <set>
 extern "C"{
     void* thread_recv(void* p);
    // void * theard_send(void * p);
@@ -31,7 +32,7 @@ class Client{
 
         int send(std::string data, size_t len);
 
-        int close();
+        int Close();
 
         
 
@@ -57,6 +58,8 @@ class Client{
         pthread_t id;
         pthread_mutex_t mutex; // A mutex used to protect the queue itself
         pthread_cond_t cond;   // A condition variable for threads to sleep on
+        std::set<long>_ack_list;
+
     
 };
 

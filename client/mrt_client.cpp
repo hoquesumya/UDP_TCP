@@ -2,6 +2,7 @@
 #include "mrt_client.h"
 #include <algorithm>
 #include <random>
+#include <chrono>
 Client::Client(unsigned short c_port, unsigned short s_port, char* s_addr, long s_size){
     client_port = htons(client_port);
     server_port = htons(s_port);
@@ -16,6 +17,14 @@ Client::Client(unsigned short c_port, unsigned short s_port, char* s_addr, long 
     servaddr.sin_family = AF_INET; 
     servaddr.sin_port = server_port;
     servaddr.sin_addr.s_addr = inet_addr(server_ip);
+    
+    struct timeval timeout;
+    timeout.tv_sec = 6;  // 5 seconds timeout
+    timeout.tv_usec = 0;
+    if (setsockopt(sockFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+        std::cerr << "Error setting timeout\n";
+        close(sockFD);
+    }
     
     if (pthread_cond_init(&cond, NULL) != 0)
         die("Cannot initialize condition variable");
@@ -43,6 +52,7 @@ int Client::connect(){
     std::mt19937 gen(rand());  
     std::uniform_int_distribution<>dis(1, 10);   
     client_seq = dis(gen);
+    std::cout<<"client seq is"<<client_seq<<std::endl;
    
     // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data
     Segment s(client_port, server_port, client_seq, 0, 0, 5, 0b000010, 0, "", data_segment);
@@ -55,20 +65,54 @@ int Client::connect(){
     sendto(sockFD, &pt, sizeof(Playload), 
                 0, (const struct sockaddr *) &servaddr,  
                     sizeof(servaddr)); 
+    /*not ab;e to recv anything from the server*/
+    /*start the timer right now*/
+  
     
-    int n = recvfrom(sockFD, &pt, sizeof(Playload), MSG_WAITALL, 
+    while(true) {
+        int n = recvfrom(sockFD, &pt, sizeof(Playload), MSG_WAITALL, 
         ( struct sockaddr *)&(this -> servaddr),&len);
+        if (n < 0){
+            if(errno == EAGAIN or errno == EWOULDBLOCK){
+                /*we will resend the seq */
+                Segment s(client_port, server_port, client_seq, 0, 0, 5, 0b000010, 0, "", data_segment);
+            // std::cout<<" jjkkk "<<data_segment<<std::endl;
+                s.create_segment(&pt);
+                socklen_t len = sizeof(servaddr);
+
+                
+                sendto(sockFD, &pt, sizeof(Playload), 
+                            0, (const struct sockaddr *) &servaddr,  
+                                sizeof(servaddr)); 
+                std::cout<<"damn packet loss"<<client_seq<<std::endl;
+                continue;
+            }
+        }
+        if(pt._ack == client_seq + 1)
+
+        {
+            std::cout<<"received data: "<<pt._ack <<std::endl;
+             break;
+
+        }
+        
+    }
+    /*int n = recvfrom(sockFD, &pt, sizeof(Playload), MSG_WAITALL, 
+        ( struct sockaddr *)&(this -> servaddr),&len);*/
     
     //final send on three way handshake connection
     // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data, data_segment
     client_seq = pt._ack;
     window= pt.rwnd_;
-    std::cout<<"window c0nnection: "<<window<<std::endl;
+   
     Segment s1(client_port, server_port, client_seq, pt.seq_ + 1, 0, 5, 0b010000, 0, "", data_segment);
     s1.create_segment(&pt);
     sendto(sockFD, &pt, sizeof(Playload), 
                 0, (const struct sockaddr *) &servaddr,  
                     sizeof(servaddr)); 
+    std::cout<<"window c0nnection: "<<window<<", "<<(int)pt.flag_field_<<std::endl;
+    client_seq += 1;
+    _ack_list.insert(client_seq);
     return 1;
 }
 
@@ -77,7 +121,6 @@ int Client::send(std::string data, size_t len){
     pthread_mutex_lock(&mutex);
 
     bool was_empty = q.empty();
-
 
     if (len <= data_segment){
         //char *temp = (char*)data.c_str();
@@ -105,7 +148,7 @@ int Client::send(std::string data, size_t len){
     return  n;
 }
 
-int Client::close(){
+int Client::Close(){
     /*
         request to close the connection with the server
         blocking until the connection is closed
@@ -132,6 +175,7 @@ void * thread_recv_cpp(void * arg){
     Client *cl = (Client *) arg;
     Client &thread_cl = *cl;
     long expected_last_ack_recvd= 0;
+    const int timeout = 6000;
    
     pthread_mutex_lock(&thread_cl.mutex);
     std::cout<<thread_cl.q.size()<<std::endl;
@@ -142,7 +186,7 @@ void * thread_recv_cpp(void * arg){
     }
     bool initial_seq = false;
     while (thread_cl.q.size()> 0){
-        std::vector<std::string>temp;
+        std::vector<Playload>temp;
         std::cout<<"window"<<thread_cl.window <<std::endl;
        
         while(thread_cl.window == 0){
@@ -165,7 +209,8 @@ void * thread_recv_cpp(void * arg){
         if (num_seg > thread_cl.q.size()){
             num_seg = thread_cl.q.size();
         }
-        
+        long l = 0;
+       
         for (int i = 0; i < num_seg; i ++){
             std::string data = thread_cl.q.front();
            
@@ -173,29 +218,71 @@ void * thread_recv_cpp(void * arg){
              thread_cl.client_seq, 1, 0, 5, 0b101111, 0, data, thread_cl.data_segment);
             Playload pt;
             s.create_segment(&pt);
+            l += strlen(pt.data_);
+            std::cout<<" isseq: "<<thread_cl.client_seq<<std::endl;
             sendto(thread_cl.sockFD, &pt, sizeof(Playload), 
                     0, (const struct sockaddr *) &thread_cl.servaddr,  
                         sizeof(thread_cl.servaddr)); 
             //std::cout << pt.checksum_<<std::endl;
             
-            temp.push_back(data);
+            temp.push_back(pt);
             thread_cl.q.pop();
             thread_cl.client_seq += data.size() + 1;
         } 
         pthread_mutex_unlock(&thread_cl.mutex);
         expected_last_ack_recvd = thread_cl.client_seq;
+        std::cout<<"expected ack will be: "<<expected_last_ack_recvd<<std::endl;
         socklen_t len = sizeof(thread_cl.servaddr);
         Playload buf;
+       // auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+       int count = 0;
+       int track_seg = 0;
         while(true){
              int n = recvfrom(thread_cl.sockFD, &buf, sizeof(Playload), MSG_WAITALL, 
                (struct sockaddr *)& thread_cl.servaddr,&len);
                std::cout<<"server ack is: "<< buf._ack<< ", "<<buf.rwnd_<<std::endl;
+
+              /* if (n < 0){
+                    if(errno == EAGAIN or errno == EWOULDBLOCK){
+                    
+                        for(auto &i:temp){
+                            sendto(thread_cl.sockFD, &i, sizeof(Playload), 
+                            0, (const struct sockaddr *) &thread_cl.servaddr,  
+                            sizeof(thread_cl.servaddr)); 
+                        }
+                        
+                        continue;
+                    }
+                }*/
+               if (thread_cl._ack_list.find(buf._ack) == thread_cl._ack_list.end()){
+                    thread_cl._ack_list.insert(buf._ack);
+                    count += 1;
+                    track_seg ++;
+
+               }
                if (buf._ack == expected_last_ack_recvd){
                     break;
-               }     
+               }
+               if (count == temp.size() - 1 &&
+                (thread_cl._ack_list.find(buf._ack) != thread_cl._ack_list.end()))
+                 /*send the rest to the segment*/
+                {
+                    int i = track_seg;
+                    for(i; i< temp.size(); i++){
+                        sendto(thread_cl.sockFD, &temp[i], sizeof(Playload), 
+                            0, (const struct sockaddr *) &thread_cl.servaddr,  
+                            sizeof(thread_cl.servaddr)); 
+                    }
+
+                }
+               
+
         }
         thread_cl.window = buf.rwnd_;
-
+        /*clearing out the buffer*/
+        for(const auto &it : temp){
+            temp.pop_back();
+        }
        pthread_mutex_lock(&thread_cl.mutex);
         
     }
