@@ -59,6 +59,8 @@ class Client{
         pthread_mutex_t mutex; // A mutex used to protect the queue itself
         pthread_cond_t cond;   // A condition variable for threads to sleep on
         std::set<long>_ack_list;
+        std::vector<long>_ack;
+        
 
     
 };

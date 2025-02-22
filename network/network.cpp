@@ -95,7 +95,7 @@ void Network::handle_client(const std::chrono::time_point
             std::cout<<"packet loss occurrs client and not sending: "<<buffer.seq_<<std::endl;
             continue;
          }
-        //send to server
+               //send to server
         std::cout<<"sending seq: "<<buffer.seq_<<std::endl;
         if(sendto(this->clnt_sock, &buffer, sizeof(Playload),
             0, (const struct sockaddr *) &main_server,  
@@ -116,6 +116,7 @@ void Network::handle_server(const std::chrono::time_point
 
         int n_server = recvfrom(clnt_sock, &buffer, sizeof(Playload), MSG_WAITALL, 
         ( struct sockaddr *) &main_server, &len_server);
+        //server packet loss
 
         /*auto res = getLossFile(start_time);
         double lastPktLoss = res.first;

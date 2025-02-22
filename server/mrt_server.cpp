@@ -101,7 +101,7 @@ void* thread_recv_buffer(void* arg){
        
         bool is_empty = serv.shared_recv.empty();
         /*lock the recv buffer */
-        std::cout<<"got tit !!!!!!!!! "<<(int)buffer.flag_field_<<std::endl;
+        std::cout<<"got tit !!!!!!!!! "<<(int)buffer.seq_<<std::endl;
         Playload temp_buffer = buffer;
         serv.shared_recv.push_back(temp_buffer);
         if(is_empty){
@@ -179,8 +179,11 @@ void* thread_send_data(void* arg){
             pthread_mutex_unlock(&serv.mutex_recv);
             /*PACKET LOss of the prevoius server pack*/
             if(buf.seq_ < expectd_seq){
+                 pthread_mutex_lock(&serv.mutex_recv);
                 serv.shared_recv.pop_front();
                 it = serv.shared_recv.end();
+                 pthread_mutex_unlock(&serv.mutex_recv);
+
                 Segment seg((uint16_t)serv.server_port, buf.des_port, 1, 
                 expectd_seq, serv.max_recv_size - 1, 5 , 0b010010, 0, "", 0);
             /*
@@ -199,18 +202,51 @@ void* thread_send_data(void* arg){
                 continue;
             }
             else if(buf.seq_ > expectd_seq){
-                /*this conditional block is when client final packet
+                /*
+                this conditional block is when client final packet
                 of cnnection get lost but server is wating for the final ack from client
                 */
+                
                 established = true;
                 partial_establised = false;
+
+                pthread_mutex_lock(&serv.mutex_established);
+                serv.established = true;
+                pthread_cond_signal(&serv.cond_established);
+                pthread_mutex_unlock(&serv.mutex_established); 
+                //this if statement when the last hanadshake ack and the first sgement adck is dropped
+                if(buf.seq_ > expectd_seq + 1){
+                    pthread_mutex_lock(&serv.mutex_recv);
+                    serv.shared_recv.pop_front();
+                    it = serv.shared_recv.begin();
+                    long remain = serv.max_recv_size - serv.shared_recv.size();
+                    pthread_mutex_unlock(&serv.mutex_recv);
+                    
+                    Segment seg((uint16_t)serv.server_port, buf.des_port, 0, 
+                        expectd_seq + 1, remain, 5 , 0b001000, 0, "", 0);
+                    Playload temp_buf;
+                    seg.create_segment(&temp_buf);
+                    /*
+                    send to the client the buf*/
+                    
+                    if(sendto(serv.sock, &temp_buf, sizeof(Playload),
+                    0, (const struct sockaddr *) &serv.clnaddr,  
+                    sizeof(sockaddr_in)) == -1)
+                    std::cout<<"error"<<std::endl;
+                    prev_seq = expectd_seq;
+                    expectd_seq = expectd_seq + 1;
+                    continue;
+
+                }
                 std::cout<<"packet loss 2: "<< buf.seq_<<std::endl;
                 expectd_seq = buf.seq_;
 
             }
             else{
+                pthread_mutex_lock(&serv.mutex_recv);
                 serv.shared_recv.pop_front();
                 it = serv.shared_recv.end();
+                pthread_mutex_unlock(&serv.mutex_recv);
                 Segment seg((uint16_t)serv.server_port, buf.des_port, 1, 
                 buf.seq_ + 1, 0, 5 , 0b010000, 0, "", 0);
                 seg.extract_segment(&buf);
@@ -223,6 +259,7 @@ void* thread_send_data(void* arg){
                 pthread_mutex_lock(&serv.mutex_established);
                 serv.established = true;
                 std::cout<<"packet loss no"<< buf.seq_<<std::endl;
+                prev_seq = buf.seq_;
                 pthread_cond_signal(&serv.cond_established);
                 pthread_mutex_unlock(&serv.mutex_established); 
             }
@@ -253,18 +290,16 @@ void* thread_send_data(void* arg){
         int remain = serv.max_recv_size - serv.shared_recv.size() ;
         std::cout<<"window remaining size is: " << remain<<std::endl;
 
-            if ( n > 0){
+            if (it == serv.shared_recv.end() ){
                 std::cout<<"only one data"<<std::endl;
                 it = serv.shared_recv.begin();
             }
-           //  buf = serv.shared_recv.front();
-            // std::cout<<buf.data_<<std::endl;
-
-            //std::cout<<"dereferencing: "<<serv.shared_recv.size() <<std::endl;
+           
             _recv_buf = *it;
             
             pthread_mutex_unlock(&serv.mutex_recv);
-            std::cout<<"expected ack is: "<< expectd_seq<<std::endl;
+
+            std::cout<<"expected seq is: "<< expectd_seq<<std::endl;
             std::cout<<"I got "<<_recv_buf.seq_<<std::endl;
             if(_recv_buf.seq_ == -1){
                 std::cout<<"found window zero"<<std::endl;
@@ -277,6 +312,7 @@ void* thread_send_data(void* arg){
                         it = serv.shared_recv.erase(it); // Handle the case where `it` is at the beginning
                 }
                 remain = serv.max_recv_size - serv.shared_recv.size();
+                pthread_mutex_unlock(&serv.mutex_recv);
                 Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
                         serv.latest_ack, remain, 5 , 0b001000, 0, "", 0);
                 seg.extract_segment(&_recv_buf);
@@ -290,41 +326,12 @@ void* thread_send_data(void* arg){
                 sizeof(sockaddr_in)) == -1)
                 std::cout<<"error"<<std::endl;
 
-                pthread_mutex_unlock(&serv.mutex_recv);
+                
                 continue;
 
             }
-            else if (_recv_buf.seq_ < expectd_seq){
-                /*we will take out the seg and will send the latest seg
-                this will happen when server side ack is dropped*/
-                
-               std::cout<<"hit the less seq: "<<expectd_seq <<", "<<_recv_buf.seq_<<std::endl;
-                pthread_mutex_lock(&serv.mutex_recv);
-                if (it != serv.shared_recv.begin()) {
-                    --it; // Move to the previous element
-                    serv.shared_recv.erase(std::next(it)); // Erase the element that was originally at `it`
-                                
-                } else {
-                        it = serv.shared_recv.erase(it); // Handle the case where `it` is at the beginning
-                }
-                remain = serv.max_recv_size - serv.shared_recv.size();
-                pthread_mutex_unlock(&serv.mutex_recv);
+            else if(_recv_buf.seq_ > expectd_seq){
 
-                Segment seg((uint16_t)serv.server_port, _recv_buf.des_port, 0, 
-                        serv.latest_ack, remain, 5 , 0b001000, 0, "", 0);
-                seg.extract_segment(&_recv_buf);
-                Playload temp_buf;
-                seg.create_segment(&temp_buf);
-                    /*
-                    send to the client the buf*/
-                    
-                if(sendto(serv.sock, &temp_buf, sizeof(Playload),
-                0, (const struct sockaddr *) &serv.clnaddr,  
-                sizeof(sockaddr_in)) == -1)
-                std::cout<<"error"<<std::endl;
-
-                /*send the latest ack*/
-                continue;
             }
             else if(_recv_buf.seq_ > expectd_seq){
                 std::cout<<"hit the repeated seq"<<std::endl;
@@ -335,8 +342,10 @@ void* thread_send_data(void* arg){
                                 
                 } else {
                         it = serv.shared_recv.erase(it); // Handle the case where `it` is at the beginning
+                        it = serv.shared_recv.end();
                 }
                 //remain = serv.max_recv_size - serv.shared_recv.size();
+
 
                 pthread_mutex_unlock(&serv.mutex_recv);
 
@@ -345,8 +354,7 @@ void* thread_send_data(void* arg){
                 seg.extract_segment(&_recv_buf);
                 Playload temp_buf;
                 seg.create_segment(&temp_buf);
-                    /*
-                    send to the client the buf*/
+                    
                     
                 if(sendto(serv.sock, &temp_buf, sizeof(Playload),
                 0, (const struct sockaddr *) &serv.clnaddr,  
@@ -376,7 +384,7 @@ void* thread_send_data(void* arg){
                     sizeof(sockaddr_in)) == -1)
                     std::cout<<"error"<<std::endl;
                     serv.ack_list.insert(serv.latest_ack);
-                }
+            }
             std::cout<<"not empty --->"<<_recv_buf.data_<<std::endl;
                 
             pthread_mutex_lock(&serv.mutex_recv);
@@ -398,25 +406,28 @@ void* thread_send_data(void* arg){
             else{
                 if (it == serv.shared_recv.begin()){
                     serv.shared_recv.pop_front();
-                    it = serv.shared_recv.begin();
+                    it = serv.shared_recv.end();
+                    std::cout<<"still space in data buffer"<<std::endl;
+                
 
                 }
                 else{
                      serv.shared_recv.pop_front();
                      std::cout<<"we are not in the end"<<std::endl;
 
-
                 }
                 pthread_mutex_unlock(&serv.mutex_recv);
        
                 pthread_mutex_lock(&serv.mutex_data);
-
-    //    std::cout<<"main data into the buffer"<< std::endl;
+                std::cout<<"push back the data to the buffer"<<std::endl;
                 bool is_emp = serv.shared_data.empty();
+
                 serv.shared_data.push_back(std::string(buf.data_));
             // std::cout<<serv.shared_data.front()<<std::endl;
                 if(is_emp){
-                    pthread_cond_signal(&serv.cond_data);
+                    std::cout<<"oopss the data buffer is empty"<<std::endl;
+
+                    pthread_cond_broadcast(&serv.cond_data);
                 }
                 pthread_mutex_unlock(&serv.mutex_data);
 
@@ -443,23 +454,29 @@ int Server::close(){
 int Server::recv(int size){
     size_t len = 0;
     int i = 0;
+    std::cout<<"starting the data thread"<<std::endl;
     while(1){
         pthread_mutex_lock(&mutex_data);
-        while(shared_data.size() == 0){
+       
+        while(shared_data.empty()){
+            std::cout<<"I am empty"<<std::endl;
             pthread_cond_wait(&cond_data, &mutex_data);
         }
-       // sleep(10);
+        std::cout<<" done sleeping"<<std::endl;
+       //sleep(10);
       
           /* pthread_mutex_unlock(&mutex_data);
             std::cout<<"sleeping"<<std::endl;
             sleep(1);
             pthread_mutex_lock(&mutex_data);
             std::cout<<" done sleeping"<<std::endl;*/
+            
         
         std::string data = shared_data.front();
         shared_data.pop_front();
         
         pthread_mutex_unlock(&mutex_data);
+        
         len += data.length();
         std::cout<< data << " ..... " <<len <<std::endl;
         i ++;

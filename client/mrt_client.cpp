@@ -19,9 +19,9 @@ Client::Client(unsigned short c_port, unsigned short s_port, char* s_addr, long 
     servaddr.sin_addr.s_addr = inet_addr(server_ip);
     
     struct timeval timeout;
-    timeout.tv_sec = 6;  // 5 seconds timeout
+    timeout.tv_sec = 15;  // 5 seconds timeout
     timeout.tv_usec = 0;
-    if (setsockopt(sockFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
+   if (setsockopt(sockFD, SOL_SOCKET, SO_RCVTIMEO, (const char*)&timeout, sizeof(timeout)) < 0) {
         std::cerr << "Error setting timeout\n";
         close(sockFD);
     }
@@ -53,6 +53,7 @@ int Client::connect(){
     std::uniform_int_distribution<>dis(1, 10);   
     client_seq = dis(gen);
     std::cout<<"client seq is"<<client_seq<<std::endl;
+    _ack_list.insert(client_seq);
    
     // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data
     Segment s(client_port, server_port, client_seq, 0, 0, 5, 0b000010, 0, "", data_segment);
@@ -65,8 +66,6 @@ int Client::connect(){
     sendto(sockFD, &pt, sizeof(Playload), 
                 0, (const struct sockaddr *) &servaddr,  
                     sizeof(servaddr)); 
-    /*not ab;e to recv anything from the server*/
-    /*start the timer right now*/
   
     
     while(true) {
@@ -104,6 +103,7 @@ int Client::connect(){
     // server_port, des_port, seq, ack, rwnd, head_flg, flag, checksum, data, data_segment
     client_seq = pt._ack;
     window= pt.rwnd_;
+    _ack_list.insert(client_seq);
    
     Segment s1(client_port, server_port, client_seq, pt.seq_ + 1, 0, 5, 0b010000, 0, "", data_segment);
     s1.create_segment(&pt);
@@ -113,6 +113,7 @@ int Client::connect(){
     std::cout<<"window c0nnection: "<<window<<", "<<(int)pt.flag_field_<<std::endl;
     client_seq += 1;
     _ack_list.insert(client_seq);
+
     return 1;
 }
 
@@ -228,60 +229,89 @@ void * thread_recv_cpp(void * arg){
             temp.push_back(pt);
             thread_cl.q.pop();
             thread_cl.client_seq += data.size() + 1;
+            thread_cl._ack.push_back(thread_cl.client_seq);
         } 
         pthread_mutex_unlock(&thread_cl.mutex);
         expected_last_ack_recvd = thread_cl.client_seq;
         std::cout<<"expected ack will be: "<<expected_last_ack_recvd<<std::endl;
         socklen_t len = sizeof(thread_cl.servaddr);
         Playload buf;
-       // auto elapsed_time = std::chrono::steady_clock::now() - start_time;
+      
        int count = 0;
        int track_seg = 0;
+       int i = 0;
         while(true){
              int n = recvfrom(thread_cl.sockFD, &buf, sizeof(Playload), MSG_WAITALL, 
                (struct sockaddr *)& thread_cl.servaddr,&len);
                std::cout<<"server ack is: "<< buf._ack<< ", "<<buf.rwnd_<<std::endl;
-
-              /* if (n < 0){
-                    if(errno == EAGAIN or errno == EWOULDBLOCK){
-                    
-                        for(auto &i:temp){
-                            sendto(thread_cl.sockFD, &i, sizeof(Playload), 
-                            0, (const struct sockaddr *) &thread_cl.servaddr,  
-                            sizeof(thread_cl.servaddr)); 
+                
+                if (buf._ack != 0 and thread_cl._ack_list.find(buf._ack) == thread_cl._ack_list.end()){
+                    /*condiering ack is missing from server
+                    if the current expected ack is less than received ack
+                    */
+                    if(thread_cl._ack[i] < buf._ack){
+                        std::cout<<"ops accumalted ack"<<std::endl;
+                        /*here I am updating the ack index to matched with the current ack
+                        so that I can advance the track_segment accordingly
+                        */
+                        while (thread_cl._ack[i] != buf._ack){
+                            i++;
+                            track_seg++;
+                            count++;
+                            thread_cl._ack_list.insert(thread_cl._ack[i]);
                         }
-                        
-                        continue;
-                    }
-                }*/
-               if (thread_cl._ack_list.find(buf._ack) == thread_cl._ack_list.end()){
-                    thread_cl._ack_list.insert(buf._ack);
-                    count += 1;
-                    track_seg ++;
+                        i++;
+                        track_seg++;
+                        count++;
+                
 
+                    }
+                    else{
+                        std::cout<<"ops no ack loss has been occurred"<<std::endl;
+                        i++;
+                        
+                        thread_cl._ack_list.insert(buf._ack);
+                        std::cout<<"entering the data"<<std::endl;
+                        count += 1;
+                        track_seg ++;
+                    }
                }
+
+                if (n < 0){
+                    if(errno == EAGAIN or errno == EWOULDBLOCK){
+                         std::cout<<"found packet loss "<<temp.size()<<std::endl;
+                        if (count <= temp.size() - 1 &&
+                        (thread_cl._ack_list.find(buf._ack) != thread_cl._ack_list.end()) or buf._ack == 0 )
+                 /*send the rest to the segment*/
+                        {
+                            std::cout<<"track seg"<<track_seg<<std::endl;
+                            for( int i = track_seg; i< temp.size(); i++){
+                                sendto(thread_cl.sockFD, &temp[i], sizeof(Playload), 
+                                    0, (const struct sockaddr *) &thread_cl.servaddr,  
+                                    sizeof(thread_cl.servaddr)); 
+                            }
+
+                        }
+                            
+                        
+                    }
+                }
+            
                if (buf._ack == expected_last_ack_recvd){
                     break;
                }
-               if (count == temp.size() - 1 &&
-                (thread_cl._ack_list.find(buf._ack) != thread_cl._ack_list.end()))
-                 /*send the rest to the segment*/
-                {
-                    int i = track_seg;
-                    for(i; i< temp.size(); i++){
-                        sendto(thread_cl.sockFD, &temp[i], sizeof(Playload), 
-                            0, (const struct sockaddr *) &thread_cl.servaddr,  
-                            sizeof(thread_cl.servaddr)); 
-                    }
-
-                }
+               
                
 
         }
+    
         thread_cl.window = buf.rwnd_;
         /*clearing out the buffer*/
         for(const auto &it : temp){
             temp.pop_back();
+        }
+        for(const auto &it : thread_cl._ack){
+            thread_cl._ack.pop_back();
         }
        pthread_mutex_lock(&thread_cl.mutex);
         

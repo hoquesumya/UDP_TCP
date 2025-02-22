@@ -18,7 +18,7 @@ int main(int argc, char* argv[]){
     }
     Server s(server_port, buff_size);
     int conn = s.accept();
-    std::cout<<"connection is: "<< conn<<std::endl;
+    std::cout<<"connection is: "<< conn <<std::endl;
     s.recv(8000);
     
 } 
