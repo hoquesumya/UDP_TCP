@@ -27,6 +27,8 @@ This project aims at  designing and implementing mini relaiable trasport(MRT) pr
          make all
         ./server <server port> < buffer size>
     ```
+## Overall architecture
+![Architecture Diagram] (arch.png)
 
 
 
